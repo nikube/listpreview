@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      font-size: 14px;
+      margin: 12px;
+      min-width: 320px;
+    }
+    label {
+      display: block;
+      margin-block: 10px 4px;
+      font-weight: 600;
+    }
+    select {
+      width: 100%;
+      padding: 4px;
+    }
+    .hint {
+      color: #777;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <label for="lines">Nombre de lignes d’aperçu</label>
+  <select id="lines">
+    <option value="1">1 ligne</option>
+    <option value="2">2 lignes</option>
+    <option value="3">3 lignes</option>
+  </select>
+
+  <label for="fontPct">Taille de police de l’aperçu</label>
+  <select id="fontPct">
+    <option value="70">Petite (70 %)</option>
+    <option value="85">Normale (85 %)</option>
+    <option value="100">Comme la liste (100 %)</option>
+  </select>
+
+  <p class="hint">Appliqué immédiatement à la liste des messages (vue Cartes).</p>
+
+  <script src="options.js"></script>
+</body>
+</html>

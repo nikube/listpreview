@@ -1,0 +1,35 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Vérifier la cohérence tag / manifest
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          MANIFEST="$(jq -r .version manifest.json)"
+          if [ "$VERSION" != "$MANIFEST" ]; then
+            echo "Tag v$VERSION ≠ manifest.json $MANIFEST" >&2
+            exit 1
+          fi
+
+      - name: Construire le xpi
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          zip -r "listpreview-$VERSION.xpi" . \
+            -x "*.git*" -x "*.xpi"
+
+      - name: Publier la release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: listpreview-*.xpi
+          generate_release_notes: true

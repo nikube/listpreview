@@ -1,0 +1,45 @@
+[
+  {
+    "namespace": "ListPreview",
+    "types": [
+      {
+        "id": "Options",
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 3,
+            "optional": true,
+            "description": "Nombre de lignes d'aperçu (1-3)."
+          },
+          "fontPct": {
+            "type": "number",
+            "minimum": 60,
+            "maximum": 120,
+            "optional": true,
+            "description": "Taille de police en % de celle de la liste."
+          }
+        }
+      }
+    ],
+    "functions": [
+      {
+        "name": "activate",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          { "name": "options", "$ref": "Options", "optional": true }
+        ]
+      },
+      {
+        "name": "setOptions",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          { "name": "options", "$ref": "Options" }
+        ]
+      }
+    ]
+  }
+]
