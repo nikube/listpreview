@@ -63,6 +63,14 @@ function snippetCss({ lines, fontPct }) {
     tr[is="thread-card"][data-properties~="dummy"] .lp-snippet {
       display: none;
     }
+    /* Cohabitation Auto Profile Picture : son avatar est monté dans la 1re
+       colonne (passée en flex-row par ses styles inline) avec un alignement
+       pensé pour les hauteurs de carte standard ; nos cartes étant plus
+       hautes (ligne d'aperçu), on le recentre verticalement. */
+    tr[is="thread-card"] .thread-card-column:first-child:has(.recipient-avatar) {
+      align-items: center;
+      justify-content: flex-start;
+    }
   `;
 }
 
