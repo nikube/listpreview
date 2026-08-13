@@ -82,6 +82,33 @@ function extraHeight(win) {
   return lineHeight * currentOptions.lines;
 }
 
+// Certains expéditeurs génèrent la partie text/plain en aplatissant le HTML
+// sans décoder les entités : le "texte brut" contient alors des &nbsp;, &#39;…
+// littéraux que coerceBodyToPlaintext renvoie tels quels.
+const NAMED_ENTITIES = {
+  nbsp: " ",
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+};
+function decodeEntities(text) {
+  return text.replace(
+    /&(?:#(\d+)|#x([0-9a-f]+)|([a-z]+));/gi,
+    (match, dec, hex, name) => {
+      if (dec || hex) {
+        try {
+          return String.fromCodePoint(parseInt(dec || hex, dec ? 10 : 16));
+        } catch (e) {
+          return match;
+        }
+      }
+      return NAMED_ENTITIES[name.toLowerCase()] ?? match;
+    }
+  );
+}
+
 // Un état par fenêtre about:3pane hookée.
 const hooked = new Map(); // win -> {cardClass, origFillRow, origDensityChange, ...}
 
@@ -137,7 +164,9 @@ function fillSnippet(row, win) {
     // Propriété absente : on va la calculer.
   }
   if (preview) {
-    snippet.textContent = preview;
+    // decodeEntities : rattrape aussi les previews mises en cache avant le
+    // correctif (entités littérales stockées dans le .msf).
+    snippet.textContent = decodeEntities(preview);
     return;
   }
   requestSnippet(win, hdr);
@@ -185,10 +214,15 @@ function requestSnippet(win, hdr) {
           // Plan B : aplatir le corps nous-mêmes.
           try {
             text = mimeMsg.coerceBodyToPlaintext(aHdr.folder) || "";
-            text = text.replace(/\s+/g, " ").trim().slice(0, SNIPPET_LENGTH);
           } catch (e) {
             dbg("coerceBodyToPlaintext failed for", attemptKey, e);
           }
+        }
+        if (text) {
+          text = decodeEntities(text)
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, SNIPPET_LENGTH);
         }
         if (!text) {
           try {
