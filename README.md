@@ -34,8 +34,7 @@ depuis un fichier**. (Release construite par tag : `git tag vX.Y.Z && git push
 
 1. Betterbird → ☰ → Outils → Outils de développement → Déboguer des modules
    (`about:debugging`) → **Charger un module complémentaire temporaire**.
-2. Sélectionner `manifest.json` du repo
-   (depuis Windows : `\\wsl.localhost\Ubuntu\home\nzaou\work\dev\listpreview\manifest.json`).
+2. Sélectionner `manifest.json` du repo.
 3. Passer la liste en **vue Cartes** (menu d'affichage de la liste des messages).
 4. Console d'erreurs (Ctrl+Maj+J) : les logs sont préfixés `[ListPreview]`.
 
@@ -66,5 +65,5 @@ impact cosmétique mineur possible.
 - Support de la vue multi-lignes Betterbird (patch de `thread-row`).
 - Activation/désactivation par dossier.
 - Packaging XPI (`zip -r listpreview.xpi manifest.json background.js api
-  options.html options.js icon.svg`) pour une installation permanente (les
-  modules temporaires disparaissent au redémarrage).
+  options.html options.js icon.svg LICENSE`) pour une installation permanente
+  (les modules temporaires disparaissent au redémarrage).

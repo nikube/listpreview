@@ -14,4 +14,4 @@ async function main() {
   });
 }
 
-main();
+main().catch(err => console.error("[ListPreview] main failed", err));

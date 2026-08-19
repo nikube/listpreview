@@ -22,6 +22,9 @@ var { ExtensionCommon } = ChromeUtils.importESModule(
 var { ExtensionSupport } = ChromeUtils.importESModule(
   "resource:///modules/ExtensionSupport.sys.mjs"
 );
+var { Services } = ChromeUtils.importESModule(
+  "resource://gre/modules/Services.sys.mjs"
+);
 var { MsgHdrToMimeMessage } = ChromeUtils.importESModule(
   "resource:///modules/gloda/MimeMessage.sys.mjs"
 );
@@ -109,8 +112,24 @@ function decodeEntities(text) {
   );
 }
 
+// État global du module (survive disable/enable sans redémarrage).
+let ThreadCardClass = null;
+let origFillRow = null;
+
+function patchedFillRow() {
+  if (origFillRow) {
+    origFillRow.call(this);
+  }
+  try {
+    const rowWin = this.ownerDocument.defaultView;
+    fillSnippet(this, rowWin);
+  } catch (e) {
+    log("fillSnippet error", e);
+  }
+}
+
 // Un état par fenêtre about:3pane hookée.
-const hooked = new Map(); // win -> {cardClass, origFillRow, origDensityChange, ...}
+const hooked = new Map(); // win -> {origDensityChange, style, attempted, refreshTimer}
 
 function log(...args) {
   console.log("[ListPreview]", ...args);
@@ -278,7 +297,7 @@ function refreshSnippets(win) {
 /**
  * Hooke une fenêtre about:3pane : CSS, _fillRow, densityChange.
  */
-function hook3Pane(win) {
+async function hook3Pane(win) {
   if (hooked.has(win) || win.closed) {
     return;
   }
@@ -289,20 +308,20 @@ function hook3Pane(win) {
     return;
   }
 
+  if (!ThreadCardClass) {
+    ThreadCardClass = cardClass;
+  }
+
   const style = doc.createElement("style");
   style.id = "lp-style";
   style.textContent = snippetCss(currentOptions);
   doc.head.appendChild(style);
 
-  const origFillRow = cardClass.prototype._fillRow;
-  cardClass.prototype._fillRow = function () {
-    origFillRow.call(this);
-    try {
-      fillSnippet(this, win);
-    } catch (e) {
-      log("fillSnippet error", e);
-    }
-  };
+  // Patch global (une seule fois, mais ré-patchable après disable/enable).
+  if (ThreadCardClass.prototype._fillRow !== patchedFillRow) {
+    origFillRow = ThreadCardClass.prototype._fillRow;
+    ThreadCardClass.prototype._fillRow = patchedFillRow;
+  }
 
   // Une ligne de plus dans le calcul de hauteur des cartes
   // (même formule que densityChange : line-height 1.5 × font-size + gap).
@@ -310,21 +329,25 @@ function hook3Pane(win) {
   const origDensityChange = threadPane.densityChange;
   threadPane.densityChange = async function (...args) {
     await origDensityChange.apply(this, args);
-    cardClass.ROW_HEIGHT = cardClass.ROW_HEIGHT + extraHeight(win);
+    ThreadCardClass.ROW_HEIGHT = ThreadCardClass.ROW_HEIGHT + extraHeight(win);
   };
 
   hooked.set(win, {
-    cardClass,
-    origFillRow,
     origDensityChange,
     style,
     attempted: new Set(),
     refreshTimer: null,
   });
 
-  win.addEventListener("unload", () => hooked.delete(win), { once: true });
+  win.addEventListener("unload", () => unhook3Pane(win), { once: true });
 
-  win.threadPane.updateThreadItemSize();
+  // Applique la hauteur supplémentaire dès le hook.
+  try {
+    await threadPane.densityChange();
+  } catch (e) {
+    log("densityChange initiale échouée", e);
+  }
+
   log("hooked", doc.URL);
 }
 
@@ -338,13 +361,17 @@ function unhook3Pane(win) {
     return;
   }
   win.clearTimeout(state.refreshTimer);
-  state.cardClass.prototype._fillRow = state.origFillRow;
-  win.threadPane.densityChange = state.origDensityChange;
   state.style.remove();
   for (const el of win.document.querySelectorAll(".lp-snippet")) {
     el.remove();
   }
-  win.threadPane.updateThreadItemSize();
+  try {
+    win.threadPane.densityChange = state.origDensityChange;
+    // Réinitialise ROW_HEIGHT à la valeur standard pour cette densité.
+    win.threadPane.densityChange();
+  } catch (e) {
+    log("densityChange restauration échouée", e);
+  }
 }
 
 /**
@@ -359,9 +386,13 @@ function maybeHookTab(tab) {
     const cw = browser.contentWindow;
     if (cw?.document?.URL === "about:3pane") {
       if (cw.document.readyState === "complete") {
-        hook3Pane(cw);
+        hook3Pane(cw).catch(e => log("hook3Pane failed", e));
       } else {
-        cw.addEventListener("load", () => hook3Pane(cw), { once: true });
+        cw.addEventListener(
+          "load",
+          () => hook3Pane(cw).catch(e => log("hook3Pane failed", e)),
+          { once: true }
+        );
       }
     }
   };
@@ -405,9 +436,9 @@ function unhookMessengerWindow(win) {
   }
 }
 
-function applyOptions(options) {
-  if (Number.isInteger(options?.lines) && options.lines >= 1) {
-    currentOptions.lines = Math.min(options.lines, 3);
+async function applyOptions(options) {
+  if (Number.isInteger(options?.lines)) {
+    currentOptions.lines = Math.max(1, Math.min(options.lines, 3));
   }
   if (Number.isFinite(options?.fontPct)) {
     currentOptions.fontPct = Math.min(Math.max(options.fontPct, 60), 120);
@@ -417,7 +448,12 @@ function applyOptions(options) {
       continue;
     }
     state.style.textContent = snippetCss(currentOptions);
-    win.threadPane.updateThreadItemSize();
+    try {
+      // Recalcule ROW_HEIGHT avec les nouvelles options.
+      await win.threadPane.densityChange();
+    } catch (e) {
+      log("densityChange lors du changement d'options échouée", e);
+    }
   }
 }
 
@@ -426,7 +462,7 @@ var ListPreview = class extends ExtensionCommon.ExtensionAPI {
     return {
       ListPreview: {
         async activate(options) {
-          applyOptions(options);
+          await applyOptions(options);
           ExtensionSupport.registerWindowListener(WINDOW_LISTENER_ID, {
             chromeURLs: ["chrome://messenger/content/messenger.xhtml"],
             onLoadWindow(win) {
@@ -436,7 +472,7 @@ var ListPreview = class extends ExtensionCommon.ExtensionAPI {
           log("activated", JSON.stringify(currentOptions));
         },
         async setOptions(options) {
-          applyOptions(options);
+          await applyOptions(options);
           log("options applied", JSON.stringify(currentOptions));
         },
       },
@@ -448,11 +484,14 @@ var ListPreview = class extends ExtensionCommon.ExtensionAPI {
       return;
     }
     ExtensionSupport.unregisterWindowListener(WINDOW_LISTENER_ID);
-    for (const win of [...hooked.keys()]) {
-      unhook3Pane(win);
-    }
     for (const win of Services.wm.getEnumerator("mail:3pane")) {
       unhookMessengerWindow(win);
+    }
+    if (ThreadCardClass && ThreadCardClass.prototype._fillRow === patchedFillRow) {
+      ThreadCardClass.prototype._fillRow = origFillRow;
+    }
+    for (const win of [...hooked.keys()]) {
+      unhook3Pane(win);
     }
     log("shut down");
   }
