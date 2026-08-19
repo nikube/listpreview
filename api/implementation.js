@@ -111,28 +111,26 @@ function decodeEntities(text) {
 
 // Certains expéditeurs déclarent un charset erroné : le corps UTF-8 est décodé
 // comme de l'ISO-8859-1, donnant "congÃ©s" au lieu de "congés". On tente de
-// rattraper ce mojibake classique en ré-encodant la chaîne en Latin1 puis en la
-// décodant à nouveau en UTF-8.
+// rattraper ce mojibake classique : escape() transforme chaque caractère Latin1
+// en byte %XX, puis decodeURIComponent interprète l'ensemble comme de l'UTF-8.
 function fixMojibake(text) {
   try {
-    const bytes = new Uint8Array(text.length);
     for (let i = 0; i < text.length; i++) {
-      const code = text.charCodeAt(i);
-      if (code > 255) {
+      if (text.charCodeAt(i) > 255) {
         return text;
       }
-      bytes[i] = code;
     }
-    const fixed = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    const fixed = decodeURIComponent(escape(text));
     if (fixed === text) {
       return text;
     }
     // Heuristique : motif typique UTF-8 décodé en Latin1 (ex. Ã©, Ã¨, Ã€).
     if (/Ã[\u0080-\u00BF]/.test(text)) {
+      log("fixed mojibake", text, "->", fixed);
       return fixed;
     }
   } catch (e) {
-    // Ce n'était pas du mojibake.
+    // Ce n'était pas du mojibake ou séquence invalide.
   }
   return text;
 }
