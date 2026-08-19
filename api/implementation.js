@@ -22,9 +22,6 @@ var { ExtensionCommon } = ChromeUtils.importESModule(
 var { ExtensionSupport } = ChromeUtils.importESModule(
   "resource:///modules/ExtensionSupport.sys.mjs"
 );
-var { Services } = ChromeUtils.importESModule(
-  "resource://gre/modules/Services.sys.mjs"
-);
 var { MsgHdrToMimeMessage } = ChromeUtils.importESModule(
   "resource:///modules/gloda/MimeMessage.sys.mjs"
 );
