@@ -2,7 +2,7 @@
   "manifest_version": 2,
   "name": "ListPreview",
   "description": "Aperçu du corps du message dans la liste (vue Cartes), façon Outlook/Gmail.",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "permissions": ["storage"],
   "options_ui": {
     "page": "options.html",

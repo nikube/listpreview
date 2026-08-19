@@ -109,6 +109,34 @@ function decodeEntities(text) {
   );
 }
 
+// Certains expéditeurs déclarent un charset erroné : le corps UTF-8 est décodé
+// comme de l'ISO-8859-1, donnant "congÃ©s" au lieu de "congés". On tente de
+// rattraper ce mojibake classique en ré-encodant la chaîne en Latin1 puis en la
+// décodant à nouveau en UTF-8.
+function fixMojibake(text) {
+  try {
+    const bytes = new Uint8Array(text.length);
+    for (let i = 0; i < text.length; i++) {
+      const code = text.charCodeAt(i);
+      if (code > 255) {
+        return text;
+      }
+      bytes[i] = code;
+    }
+    const fixed = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    if (fixed === text) {
+      return text;
+    }
+    // Heuristique : motif typique UTF-8 décodé en Latin1 (ex. Ã©, Ã¨, Ã€).
+    if (/Ã[\u0080-\u00BF]/.test(text)) {
+      return fixed;
+    }
+  } catch (e) {
+    // Ce n'était pas du mojibake.
+  }
+  return text;
+}
+
 // État global du module (survive disable/enable sans redémarrage).
 let ThreadCardClass = null;
 let origFillRow = null;
@@ -182,7 +210,7 @@ function fillSnippet(row, win) {
   if (preview) {
     // decodeEntities : rattrape aussi les previews mises en cache avant le
     // correctif (entités littérales stockées dans le .msf).
-    snippet.textContent = decodeEntities(preview);
+    snippet.textContent = fixMojibake(decodeEntities(preview));
     return;
   }
   requestSnippet(win, hdr);
@@ -235,10 +263,12 @@ function requestSnippet(win, hdr) {
           }
         }
         if (text) {
-          text = decodeEntities(text)
-            .replace(/\s+/g, " ")
-            .trim()
-            .slice(0, SNIPPET_LENGTH);
+          text = fixMojibake(
+            decodeEntities(text)
+              .replace(/\s+/g, " ")
+              .trim()
+              .slice(0, SNIPPET_LENGTH)
+          );
         }
         if (!text) {
           try {
